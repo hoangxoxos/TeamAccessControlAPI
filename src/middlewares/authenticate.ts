@@ -2,12 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { AppError } from "../common/utils/app-error.js";
 import { verifyAccessToken } from "../common/utils/token.js";
 
-export function authenticate(
-  err: Error,
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+export function authenticate(req: Request, res: Response, next: NextFunction) {
   try {
     const authorization = req.headers.authorization;
 

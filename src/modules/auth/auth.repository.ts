@@ -23,6 +23,28 @@ class AuthRepository {
     return await client.session.create({ data });
   }
 
+  async findAllSessions(userId: string, tx?: TransactionClient) {
+    const client = this.getClient(tx);
+
+    return client.session.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        userId: true,
+        replacedBy: true,
+        familyId: true,
+        userAgent: true,
+        ipAddress: true,
+        isRevoked: true,
+        expiresAt: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  }
+
   async findSessionByTokenHash(token: string, tx?: TransactionClient) {
     const client = this.getClient(tx);
 
@@ -44,11 +66,11 @@ class AuthRepository {
     });
   }
 
-  async revokeAllSessionByFamilyId(familyId: string, tx?: TransactionClient) {
+  async revokeAllSessions(userId: string, tx?: TransactionClient) {
     const client = this.getClient(tx);
 
     return client.session.updateMany({
-      where: { familyId, isRevoked: false },
+      where: { userId, isRevoked: false },
       data: { isRevoked: true },
     });
   }

@@ -106,7 +106,7 @@ class AuthService {
     }
 
     if (session.isRevoked) {
-      await authRepository.revokeAllSessionByFamilyId(session.familyId);
+      await authRepository.revokeAllSessions(session.userId);
       throw new AppError(
         401,
         "Refresh token reuse detected. Please login again",
@@ -158,6 +158,34 @@ class AuthService {
       refreshToken: newRefreshToken,
       sessionId: result.id,
     };
+  }
+
+  async logout(token: string) {
+    const tokenHash = hashToken(token);
+    const session = await authRepository.findSessionByTokenHash(tokenHash);
+
+    if (!session) {
+      throw new AppError(401, "Invalid or expired refresh token");
+    }
+
+    await authRepository.revokeSessionById(session.id);
+  }
+
+  async logoutAll(token: string) {
+    const tokenHash = hashToken(token);
+    const session = await authRepository.findSessionByTokenHash(tokenHash);
+
+    if (!session) {
+      throw new AppError(401, "Invalid or expired refresh token");
+    }
+
+    await authRepository.revokeAllSessions(session.userId);
+  }
+
+  async getSessions(userId: string) {
+    const sessions = await authRepository.findAllSessions(userId);
+
+    return sessions;
   }
 }
 

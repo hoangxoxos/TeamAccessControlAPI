@@ -5,9 +5,8 @@ import { prisma, testDbConnection } from "./common/config/prisma.js";
 
 const PORT = env.PORT || 3000;
 
-testDbConnection();
-
 const server = app.listen(PORT, () => {
+  testDbConnection();
   logger.info(`Server is running on PORT http://localhost:${PORT}`);
 });
 

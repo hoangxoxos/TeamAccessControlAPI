@@ -15,4 +15,9 @@ authRoute.post(
 authRoute.post("/login", validate(loginSchema), authController.loginHandler);
 authRoute.post("/refresh", authController.refreshHandler);
 
+authRoute.post("/logout", authenticate, authController.logoutHandler);
+authRoute.post("/logout-all", authenticate, authController.logoutAllHandler);
+
+authRoute.get("/sessions", authenticate, authController.getSessionsHandler);
+
 export default authRoute;
