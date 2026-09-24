@@ -1,0 +1,221 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User & Auth
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships   Membership[]
+  sessions      Session[]
+  ownedProjects Project[]    @relation("ProjectOwner")
+  invitesSent   Invitation[] @relation("InvitedBy")
+  auditLogs     AuditLog[]   @relation("ActorLogs")
+
+  @@index([email])
+  @@map("users")
+}
+
+// A login session, stored in DB so it can be listed and revoked.
+// Refresh token ROTATION: each time a refresh token is used, mark this
+// row revoked and create a new Session, linked by `replacedBy`.
+model Session {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  refreshTokenHash String  @unique // sha256 hash of the refresh token, never store raw
+  replacedBy       String? // id of the Session that replaced this one (rotation chain)
+
+  userAgent String?
+  ipAddress String?
+
+  isRevoked Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ------------------------------------------------
+// ORGANIZATION & TEAM
+// ------------------------------------------------
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  teams Team[]
+
+  @@map("organizations")
+}
+
+model Team {
+  id             String       @id @default(uuid())
+  name           String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  memberships Membership[]
+  projects    Project[]
+  invitations Invitation[]
+
+  @@unique([organizationId, name])
+  @@map("teams")
+}
+
+// ------------------------------------------------
+// RBAC
+// ------------------------------------------------
+
+// A User's role inside one specific Team.
+// Same user can be "admin" in Team A and "member" in Team B.
+model Membership {
+  id     String @id @default(uuid())
+  userId String
+  teamId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id])
+
+  joinedAt DateTime @default(now())
+
+  @@unique([userId, teamId]) // one role per user per team
+  @@index([teamId])
+  @@map("memberships")
+}
+
+model Role {
+  id          String  @id @default(uuid())
+  name        String  @unique // "owner" | "admin" | "member" | "viewer"
+  description String?
+
+  permissions RolePermission[]
+  memberships Membership[]
+  invitations Invitation[]
+
+  @@map("roles")
+}
+
+// Examples of key: "users.read", "users.invite", "projects.write", "billing.read"
+model Permission {
+  id          String  @id @default(uuid())
+  key         String  @unique
+  description String?
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ------------------------------------------------
+// RESOURCE WITH OWNERSHIP (example protected resource)
+// ------------------------------------------------
+
+// A resource that needs BOTH checks:
+// 1. route-level: does the caller's role have "projects.write"?
+// 2. resource-level: is the caller the owner (or does their role bypass ownership)?
+model Project {
+  id        String   @id @default(uuid())
+  name      String
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  ownerId   String
+  owner     User     @relation("ProjectOwner", fields: [ownerId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([teamId])
+  @@index([ownerId])
+  @@map("projects")
+}
+
+// ------------------------------------------------
+// INVITATIONS
+// ------------------------------------------------
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+model Invitation {
+  id          String @id @default(uuid())
+  email       String
+  teamId      String
+  team        Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  roleId      String
+  role        Role   @relation(fields: [roleId], references: [id])
+  invitedById String
+  invitedBy   User   @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  tokenHash  String           @unique // sha256 hash of the invite token sent by email
+  status     InvitationStatus @default(PENDING)
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime         @default(now())
+
+  @@index([teamId])
+  @@index([email])
+  @@map("invitations")
+}
+
+// ------------------------------------------------
+// AUDIT LOG
+// ------------------------------------------------
+
+// One row per important action.
+// action examples: "user.login", "user.logout", "member.invited",
+// "member.invite_accepted", "member.role_changed", "permission.changed"
+model AuditLog {
+  id      String  @id @default(uuid())
+  actorId String?
+  actor   User?   @relation("ActorLogs", fields: [actorId], references: [id], onDelete: SetNull)
+
+  action     String
+  targetType String // "Team" | "Membership" | "Invitation" | "Project" | "User"
+  targetId   String?
+
+  metadata  Json? // e.g. { "oldRole": "member", "newRole": "admin" }
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
