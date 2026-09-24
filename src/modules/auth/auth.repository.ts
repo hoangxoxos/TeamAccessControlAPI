@@ -11,6 +11,7 @@ class AuthRepository {
       userId: string;
       refreshTokenHash: string;
       replacedBy?: string;
+      familyId: string;
       userAgent?: string;
       ipAddress?: string;
       expiresAt: Date;
@@ -19,7 +20,52 @@ class AuthRepository {
   ) {
     const client = this.getClient(tx);
 
-    await client.session.create({ data });
+    return await client.session.create({ data });
+  }
+
+  async findSessionByTokenHash(token: string, tx?: TransactionClient) {
+    const client = this.getClient(tx);
+
+    return client.session.findUnique({ where: { refreshTokenHash: token } });
+  }
+
+  async findSessionById(id: string, tx?: TransactionClient) {
+    const client = this.getClient(tx);
+
+    return client.session.findUnique({ where: { id } });
+  }
+
+  async revokeSessionById(id: string, tx?: TransactionClient) {
+    const client = this.getClient(tx);
+
+    return client.session.updateMany({
+      where: { id, isRevoked: false, expiresAt: { gt: new Date() } },
+      data: { isRevoked: true },
+    });
+  }
+
+  async revokeAllSessionByFamilyId(familyId: string, tx?: TransactionClient) {
+    const client = this.getClient(tx);
+
+    return client.session.updateMany({
+      where: { familyId, isRevoked: false },
+      data: { isRevoked: true },
+    });
+  }
+
+  async replaceSession(
+    oldSessionId: string,
+    newSessionId: string,
+    tx?: TransactionClient,
+  ) {
+    const client = this.getClient(tx);
+
+    return client.session.update({
+      where: { id: oldSessionId },
+      data: {
+        replacedBy: newSessionId,
+      },
+    });
   }
 }
 

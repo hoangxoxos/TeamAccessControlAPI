@@ -43,6 +43,9 @@ model Session {
   refreshTokenHash String  @unique // sha256 hash of the refresh token, never store raw
   replacedBy       String? // id of the Session that replaced this one (rotation chain)
 
+  // All sessions in one rotation chain share this ID
+  familyId String
+
   userAgent String?
   ipAddress String?
 

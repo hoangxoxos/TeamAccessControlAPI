@@ -13,6 +13,6 @@ authRoute.post(
 );
 
 authRoute.post("/login", validate(loginSchema), authController.loginHandler);
-authRoute.post("/refresh", authenticate, authController.refreshHandler);
+authRoute.post("/refresh", authController.refreshHandler);
 
 export default authRoute;

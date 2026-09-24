@@ -1,9 +1,12 @@
 import app from "./app.js";
 import { logger } from "./common/utils/logger.js";
 import { env } from "./common/config/env.js";
-import { prisma } from "./common/config/prisma.js";
+import { prisma, testDbConnection } from "./common/config/prisma.js";
 
 const PORT = env.PORT || 3000;
+
+testDbConnection();
+
 const server = app.listen(PORT, () => {
   logger.info(`Server is running on PORT http://localhost:${PORT}`);
 });
